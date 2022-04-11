@@ -1,0 +1,124 @@
+{{ if .Values.gremlin.installK8sClient }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: chao
+    app.kubernetes.io/name: chao
+    helm.sh/chart: {{ include "gremlin.chart" . }}
+    app.kubernetes.io/version: "1"
+  name: chao
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: chao
+      app.kubernetes.io/name: chao
+      app.kubernetes.io/version: "1"
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: chao
+        app.kubernetes.io/name: chao
+        helm.sh/chart: {{ include "gremlin.chart" . }}
+        app.kubernetes.io/version: "1"
+    spec:
+      serviceAccountName: chao
+      {{- if .Values.chao.affinity }}
+      affinity: {{ toYaml .Values.chao.affinity | trimSuffix "\n" | nindent 8 }}
+      {{- end }}
+      {{- if .Values.chao.nodeSelector }}
+      nodeSelector: {{ toYaml .Values.chao.nodeSelector | trimSuffix "\n" | nindent 8 }}
+      {{- end }}
+      {{- if .Values.chao.tolerations }}
+      tolerations: {{ toYaml .Values.chao.tolerations | trimSuffix "\n" | nindent 8 }}
+      {{- end }}
+      {{- if .Values.chaoimage.pullSecret }}
+      imagePullSecrets:
+      - name: {{ .Values.chaoimage.pullSecret }}
+      {{- end }}
+      containers:
+        - image: {{ .Values.chaoimage.repository }}:{{ .Values.chaoimage.tag }}
+        {{- if .Values.resources }}
+          resources:
+{{ toYaml .Values.resources | trimSuffix "\n" | indent 12 }}
+        {{- end }}
+          env:
+            - name: GREMLIN_TEAM_ID
+{{- /* If we aren't managing this secret and a teamID was supplied, assume teamID is not in the external secret */}}
+{{- if (and (not .Values.gremlin.secret.managed) (default .Values.gremlin.teamID .Values.gremlin.secret.teamID)) }}
+              value: {{ default .Values.gremlin.teamID .Values.gremlin.secret.teamID | quote }}
+{{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name:  {{ include "gremlin.secretName" . }}
+                  key: GREMLIN_TEAM_ID
+{{- end }}
+            - name: GREMLIN_CLUSTER_ID
+{{- /* If we aren't managing this secret and a clusterID was supplied, assume clusterID is not in the external secret */}}
+{{- if (and (not .Values.gremlin.secret.managed) (default .Values.gremlin.clusterID .Values.gremlin.secret.clusterID)) }}
+              value: {{ default .Values.gremlin.clusterID .Values.gremlin.secret.clusterID | quote }}
+{{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name:  {{ include "gremlin.secretName" . }}
+                  key: GREMLIN_CLUSTER_ID
+{{- end }}
+{{- if (eq (include "gremlin.secretType" .) "secret") }}
+            - name: GREMLIN_TEAM_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gremlin.secretName" . }}
+                  key: GREMLIN_TEAM_SECRET
+{{- end }}
+{{- if .Values.gremlin.proxy.url }}
+            - name: https_proxy
+              value: {{ .Values.gremlin.proxy.url }}
+            - name: no_proxy
+              value: $(KUBERNETES_SERVICE_HOST):$(KUBERNETES_SERVICE_PORT)
+{{- end }}
+{{- if .Values.ssl.certFile }}
+            - name: SSL_CERT_FILE
+              value: /etc/gremlin/ssl/certfile.pem
+{{- end }}
+{{- if .Values.ssl.certDir }}
+            - name: SSL_CERT_DIR
+              value: {{ .Values.ssl.certDir }}
+{{- end }}
+          args:
+            - "-api_url"
+            - "{{ include "gremlinServiceUrl" . }}/kubernetes"
+            {{- if (eq (include "gremlin.secretType" .) "certificate") }}
+            - "-cert_path"
+            - "/var/lib/gremlin/cert/gremlin.cert"
+            - "-key_path"
+            - "/var/lib/gremlin/cert/gremlin.key"
+            {{- end }}
+          imagePullPolicy: {{ .Values.chaoimage.pullPolicy }}
+          name: chao
+{{- if (or ((eq (include "gremlin.secretType" .) "certificate")) .Values.ssl.certFile) }}
+          volumeMounts:
+{{- end }}
+{{- if (eq (include "gremlin.secretType" .) "certificate") }}
+          - name: gremlin-cert
+            mountPath: /var/lib/gremlin/cert
+            readOnly: true
+{{- end }}
+{{- if .Values.ssl.certFile }}
+          - name: ssl-cert-file
+            mountPath: /etc/gremlin/ssl
+            readOnly: true
+{{- end }}
+      volumes:
+      - name: gremlin-cert
+        secret:
+          secretName: {{ include "gremlin.secretName" . }}
+{{- if .Values.ssl.certFile }}
+      - name: ssl-cert-file
+        secret:
+          secretName: ssl-cert-file
+{{ end }}
+---
+{{ end }}
+

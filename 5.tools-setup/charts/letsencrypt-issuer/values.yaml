@@ -1,0 +1,6 @@
+type: staging
+namespace: cert-manager
+staging_server_url: https://acme-staging-v02.api.letsencrypt.org/directory
+prod_server_url: https://acme-v02.api.letsencrypt.org/directory
+email: youremail@gmail.com
+secret_name: letsencrypt-staging

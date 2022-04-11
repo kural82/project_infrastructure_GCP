@@ -1,0 +1,11 @@
+apiVersion: v1
+appVersion: "1.0"
+description: A Helm chart to install Prod/Staging Let’s Encrypt cert-manager ClusterIssuer
+name: letsencrypt-issuer
+version: 0.1.0
+maintainers:
+  - name: Islam Kambarov
+    email: ikambarov@yahoo.com
+keywords:
+  - letsencrypt
+  - letsencrypt-issuer
